@@ -191,6 +191,14 @@ legend { font-weight: 600; font-size: .925rem; margin-bottom: .4rem; }
 .toggle:has(input:checked) { background: var(--primary-bg); border-color: var(--primary); color: var(--primary); }
 .toggle-off { cursor: not-allowed; color: var(--muted); background: var(--chip); }
 
+/* Chiavi non in elenco */
+.extra-keys { margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
+.extra-head { display: flex; flex-direction: column; gap: .15rem; margin-bottom: .6rem; }
+.extra-list { display: flex; flex-direction: column; gap: .5rem; margin-bottom: .6rem; }
+.extra-row { display: flex; gap: .4rem; align-items: center; }
+.extra-row input { margin: 0; flex: 1; }
+.extra-remove { font-size: 1.3rem; width: 46px; padding: 0; }
+
 /* Numero chiave e suggerimenti */
 .number-box { display: flex; flex-direction: column; align-items: flex-end; gap: .25rem; }
 .number-box input { width: 9rem; margin: 0; text-align: center; font-size: 1.1rem; font-weight: 600; }

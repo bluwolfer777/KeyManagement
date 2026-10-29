@@ -312,14 +312,17 @@ def loan_new():
                 number = clean(v, 30)
                 if number:
                     numbered[to_int(k[4:])] = number
-        if not generic and not numbered:
+        extras = [clean(x, 100) for x in form.getlist("extra") if clean(x, 100)]
+        if len(extras) > 10:
+            errors.append("Al massimo 10 chiavi non in elenco per prestito.")
+        if not generic and not numbered and not extras:
             errors.append("Seleziona almeno una chiave.")
         if not valid_signature(signature):
             errors.append("La firma è obbligatoria.")
         if not errors:
             try:
                 loan_id = db.create_loan(first, last, email, phone, notes, signature, operator_name(),
-                                         generic, numbered)
+                                         generic, numbered, extras[:10])
             except db.Unavailable as exc:
                 errors.append(str(exc))
             else:
@@ -331,7 +334,8 @@ def loan_new():
     types = db.key_type_stats(active_only=True)
     out_numbers = {t["id"]: [n["key_number"] for n in db.numbers_out(t["id"])]
                    for t in types if t["kind"] == "numbered"}
-    return render_template("loan_new.html", types=types, out_numbers=out_numbers, form=form), \
+    extras = [x for x in form.getlist("extra") if x.strip()] or [""]
+    return render_template("loan_new.html", types=types, out_numbers=out_numbers, form=form, extras=extras), \
         (400 if request.method == "POST" else 200)
 
 
@@ -523,8 +527,8 @@ def return_new(borrower_id):
                 elif qty > 0:
                     quantities[to_int(k[4:])] = qty
         signature = form.get("signature", "")
-        if signature and not valid_signature(signature):
-            errors.append("Firma non valida, riprova.")
+        if not valid_signature(signature):
+            errors.append("La firma di chi riconsegna è obbligatoria.")
         if not quantities:
             errors.append("Seleziona almeno una chiave da riconsegnare.")
         if not errors:

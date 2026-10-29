@@ -61,6 +61,22 @@
     {% else %}
       <p class="empty">Nessuna chiave attiva. <a href="{{ url_for('key_new') }}">Aggiungi una chiave</a>.</p>
     {% endif %}
+
+    <div class="extra-keys">
+      <div class="extra-head">
+        <strong>Chiave non in elenco</strong>
+        <span class="muted small">Scrivila qui se non è tra quelle sopra: vale solo per questo prestito e non viene aggiunta all'elenco delle chiavi.</span>
+      </div>
+      <div class="extra-list" id="extra-list">
+        {% for x in extras %}
+        <div class="extra-row">
+          <input name="extra" value="{{ x }}" maxlength="100" placeholder="es. Chiave armadio laboratorio 3" data-extra aria-label="Chiave non in elenco">
+          <button type="button" class="btn btn-ghost extra-remove" data-extra-remove aria-label="Togli questa chiave">×</button>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn btn-sm" data-extra-add>+ Aggiungi un'altra</button>
+    </div>
   </section>
 
   <section class="card">

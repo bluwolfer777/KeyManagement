@@ -45,10 +45,12 @@ CREATE TABLE IF NOT EXISTS loans (
 CREATE TABLE IF NOT EXISTS loan_items (
     id           INTEGER PRIMARY KEY,
     loan_id      INTEGER NOT NULL REFERENCES loans(id),
-    key_type_id  INTEGER NOT NULL REFERENCES key_types(id),
+    key_type_id  INTEGER REFERENCES key_types(id),  -- NULL per le chiavi non in elenco
+    custom_name  TEXT,                           -- nome della chiave non in elenco, scritto al prestito
     key_number   TEXT,                           -- solo per 'numbered', scritto al prestito
     quantity     INTEGER NOT NULL CHECK (quantity > 0),
-    returned_qty INTEGER NOT NULL DEFAULT 0 CHECK (returned_qty >= 0 AND returned_qty <= quantity)
+    returned_qty INTEGER NOT NULL DEFAULT 0 CHECK (returned_qty >= 0 AND returned_qty <= quantity),
+    CHECK (key_type_id IS NOT NULL OR custom_name IS NOT NULL)
 );
 CREATE TABLE IF NOT EXISTS returns (
     id          INTEGER PRIMARY KEY,
@@ -121,16 +123,21 @@ def migrate(conn):
     conn.execute("PRAGMA foreign_keys = OFF")
     conn.execute("BEGIN IMMEDIATE")
     try:
-        # Chiavi numerate: il numero ora si scrive al prestito, gli esemplari non esistono più.
-        if "key_copy_id" in _columns(conn, "loan_items"):
-            # Ricostruisce loan_items senza il riferimento a key_copies
-            # (procedura SQLite: nuova tabella, copia, drop, rename).
+        # loan_items va ricostruita (procedura SQLite: nuova tabella, copia, drop, rename) se:
+        # - ha ancora il riferimento agli esemplari numerati (key_copies), ora il numero si scrive al prestito;
+        # - non ammette ancora le chiavi non in elenco (custom_name, key_type_id facoltativo).
+        cols = _columns(conn, "loan_items")
+        if "key_copy_id" in cols or "custom_name" not in cols:
             create = SCHEMA[SCHEMA.index("CREATE TABLE IF NOT EXISTS loan_items"):]
-            create = create[:create.index(";")].replace("IF NOT EXISTS loan_items", "loan_items_new")
+            create = create[:create.index(";\n")].replace("IF NOT EXISTS loan_items", "loan_items_new")
             conn.execute(create)
-            conn.execute("""INSERT INTO loan_items_new (id, loan_id, key_type_id, key_number, quantity, returned_qty)
-                            SELECT li.id, li.loan_id, li.key_type_id, c.number, li.quantity, li.returned_qty
-                            FROM loan_items li LEFT JOIN key_copies c ON c.id = li.key_copy_id""")
+            if "key_copy_id" in cols:
+                number, join = "c.number", "LEFT JOIN key_copies c ON c.id = li.key_copy_id"
+            else:
+                number, join = "li.key_number", ""
+            conn.execute(f"""INSERT INTO loan_items_new (id, loan_id, key_type_id, key_number, quantity, returned_qty)
+                             SELECT li.id, li.loan_id, li.key_type_id, {number}, li.quantity, li.returned_qty
+                             FROM loan_items li {join}""")
             conn.execute("DROP TABLE loan_items")
             conn.execute("ALTER TABLE loan_items_new RENAME TO loan_items")
         if "key_copies" in tables:
@@ -291,10 +298,10 @@ def borrower(borrower_id):
 def outstanding_items(borrower_id):
     result = rows("""
         SELECT li.*, li.quantity - li.returned_qty AS remaining, l.created_at AS loan_date,
-               kt.name AS type_name, kt.kind
+               COALESCE(kt.name, li.custom_name) AS type_name, COALESCE(kt.kind, 'adhoc') AS kind
         FROM loan_items li
         JOIN loans l ON l.id = li.loan_id
-        JOIN key_types kt ON kt.id = li.key_type_id
+        LEFT JOIN key_types kt ON kt.id = li.key_type_id
         WHERE l.borrower_id = ? AND li.returned_qty < li.quantity""", (borrower_id,))
     result.sort(key=lambda r: (r["type_name"].lower(), natural_key(r["key_number"]), r["loan_date"]))
     return result
@@ -315,8 +322,9 @@ def upsert_borrower(conn, first, last, email, phone):
 
 # --- Prestiti ------------------------------------------------------------------
 
-def create_loan(first, last, email, phone, notes, signature, operator, generic, numbered):
-    """generic: id delle chiavi senza numero; numbered: {key_type_id: numero scritto dall'operatore}.
+def create_loan(first, last, email, phone, notes, signature, operator, generic, numbered, extras=()):
+    """generic: id delle chiavi senza numero; numbered: {key_type_id: numero scritto dall'operatore};
+    extras: nomi di chiavi non in elenco, scritti al momento e non salvati nell'anagrafica chiavi.
     Ogni utente può avere al massimo una chiave per tipo."""
     with transaction() as conn:
         borrower_id = upsert_borrower(conn, first, last, email, phone)
@@ -341,15 +349,16 @@ def create_loan(first, last, email, phone, notes, signature, operator, generic, 
                 raise Unavailable(f"«{kt['name']}» n. {number} risulta già in prestito.")
             if kt["total_qty"] - type_out_qty(conn, type_id) < 1:
                 raise Unavailable(f"«{kt['name']}»: nessuna copia disponibile.")
-            items.append((type_id, number, 1))
+            items.append((type_id, None, number, 1))
+        items += [(None, name, None, 1) for name in extras]
         loan_id = conn.execute(
             "INSERT INTO loans (borrower_id, first_name, last_name, name, email, phone, signature, notes, "
             "operator, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (borrower_id, first, last, full_name(first, last), email, phone, signature, notes, operator,
              now())).lastrowid
         conn.executemany(
-            "INSERT INTO loan_items (loan_id, key_type_id, key_number, quantity) VALUES (?, ?, ?, ?)",
-            [(loan_id, t, n, q) for t, n, q in items])
+            "INSERT INTO loan_items (loan_id, key_type_id, custom_name, key_number, quantity) VALUES (?, ?, ?, ?, ?)",
+            [(loan_id, t, c, n, q) for t, c, n, q in items])
         return loan_id
 
 
@@ -370,9 +379,9 @@ def loan_items(loan_ids):
         return {}
     marks = ",".join("?" * len(loan_ids))
     result = rows(f"""
-        SELECT li.*, li.quantity - li.returned_qty AS remaining, kt.name AS type_name, kt.kind
+        SELECT li.*, li.quantity - li.returned_qty AS remaining, COALESCE(kt.name, li.custom_name) AS type_name, COALESCE(kt.kind, 'adhoc') AS kind
         FROM loan_items li
-        JOIN key_types kt ON kt.id = li.key_type_id
+        LEFT JOIN key_types kt ON kt.id = li.key_type_id
         WHERE li.loan_id IN ({marks})""", list(loan_ids))
     result.sort(key=lambda r: (r["type_name"].lower(), natural_key(r["key_number"])))
     by_loan = {}
@@ -468,11 +477,11 @@ def returns(borrower_id=None, loan_id=None, return_ids=None):
         args += list(return_ids)
     data = rows(f"""
         SELECT r.id, r.borrower_id, r.signature, r.notes, r.operator, r.created_at,
-               ri.quantity, li.loan_id, li.key_number, kt.name AS type_name, b.name AS borrower_name
+               ri.quantity, li.loan_id, li.key_number, COALESCE(kt.name, li.custom_name) AS type_name, b.name AS borrower_name
         FROM returns r
         JOIN return_items ri ON ri.return_id = r.id
         JOIN loan_items li ON li.id = ri.loan_item_id
-        JOIN key_types kt ON kt.id = li.key_type_id
+        LEFT JOIN key_types kt ON kt.id = li.key_type_id
         JOIN borrowers b ON b.id = r.borrower_id
         {"WHERE " + " AND ".join(where) if where else ""}
         ORDER BY r.created_at DESC, r.id DESC""", args)
@@ -492,7 +501,7 @@ def receipt_items(loan_id=None, borrower_id=None):
     """Righe per la ricevuta PDF: una per chiave, con firma e data dell'ultima riconsegna."""
     where, args = ("l.id = ?", loan_id) if loan_id is not None else ("l.borrower_id = ?", borrower_id)
     return rows(f"""
-        SELECT li.id, li.quantity, li.returned_qty, li.key_number, kt.name AS type_name,
+        SELECT li.id, li.quantity, li.returned_qty, li.key_number, COALESCE(kt.name, li.custom_name) AS type_name,
                l.created_at AS loan_date, l.signature AS loan_signature,
                (SELECT r.created_at FROM return_items ri JOIN returns r ON r.id = ri.return_id
                 WHERE ri.loan_item_id = li.id ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS return_date,
@@ -500,9 +509,9 @@ def receipt_items(loan_id=None, borrower_id=None):
                 WHERE ri.loan_item_id = li.id ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS return_signature
         FROM loan_items li
         JOIN loans l ON l.id = li.loan_id
-        JOIN key_types kt ON kt.id = li.key_type_id
+        LEFT JOIN key_types kt ON kt.id = li.key_type_id
         WHERE {where}
-        ORDER BY l.created_at, l.id, kt.name COLLATE NOCASE, li.key_number""", (args,))
+        ORDER BY l.created_at, l.id, type_name COLLATE NOCASE, li.key_number""", (args,))
 
 
 # --- Storico -------------------------------------------------------------------
@@ -517,8 +526,8 @@ def history(q="", date_from="", date_to="", kind="tutti", type_id=None, limit=50
         if q:
             where.append("""(l.name LIKE ? OR (l.last_name || ' ' || l.first_name) LIKE ? OR l.email LIKE ?
                 OR l.phone LIKE ? OR l.operator LIKE ? OR l.notes LIKE ?
-                OR EXISTS (SELECT 1 FROM loan_items li JOIN key_types kt ON kt.id = li.key_type_id
-                           WHERE li.loan_id = l.id AND (kt.name LIKE ? OR li.key_number LIKE ?)))""")
+                OR EXISTS (SELECT 1 FROM loan_items li LEFT JOIN key_types kt ON kt.id = li.key_type_id
+                           WHERE li.loan_id = l.id AND (COALESCE(kt.name, li.custom_name) LIKE ? OR li.key_number LIKE ?)))""")
             args += [like] * 8
         if date_from:
             where.append("date(l.created_at) >= ?")
@@ -544,8 +553,8 @@ def history(q="", date_from="", date_to="", kind="tutti", type_id=None, limit=50
             where.append("""(b.name LIKE ? OR (b.last_name || ' ' || b.first_name) LIKE ? OR b.email LIKE ?
                 OR b.phone LIKE ? OR r.operator LIKE ? OR r.notes LIKE ?
                 OR EXISTS (SELECT 1 FROM return_items ri JOIN loan_items li ON li.id = ri.loan_item_id
-                           JOIN key_types kt ON kt.id = li.key_type_id
-                           WHERE ri.return_id = r.id AND (kt.name LIKE ? OR li.key_number LIKE ?)))""")
+                           LEFT JOIN key_types kt ON kt.id = li.key_type_id
+                           WHERE ri.return_id = r.id AND (COALESCE(kt.name, li.custom_name) LIKE ? OR li.key_number LIKE ?)))""")
             args += [like] * 8
         if date_from:
             where.append("date(r.created_at) >= ?")

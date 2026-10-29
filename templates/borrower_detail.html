@@ -21,7 +21,7 @@
       <thead><tr><th>Chiave</th><th class="num">Q.tà</th><th>Dal</th></tr></thead>
       <tbody>
       {% for it in items %}
-        <tr><td>{{ it.type_name }}{% if it.key_number %} <strong>n. {{ it.key_number }}</strong>{% endif %}</td>
+        <tr><td>{{ it.type_name }}{% if it.key_number %} <strong>n. {{ it.key_number }}</strong>{% endif %}{% if it.kind == 'adhoc' %} <span class="tag">non in elenco</span>{% endif %}</td>
             <td class="num">{{ it.remaining }}</td>
             <td><a href="{{ url_for('loan_detail', loan_id=it.loan_id) }}">{{ it.loan_date|dt }}</a></td></tr>
       {% endfor %}

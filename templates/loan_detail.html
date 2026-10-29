@@ -34,7 +34,7 @@
       <tbody>
       {% for it in items %}
         <tr>
-          <td>{{ it.type_name }}{% if it.key_number %} <strong>n. {{ it.key_number }}</strong>{% endif %}</td>
+          <td>{{ it.type_name }}{% if it.key_number %} <strong>n. {{ it.key_number }}</strong>{% endif %}{% if it.kind == 'adhoc' %} <span class="tag">non in elenco</span>{% endif %}</td>
           <td class="num">{{ it.quantity }}</td>
           <td>{% if it.remaining == 0 %}<span class="pill pill-ok">Riconsegnata</span>
               {% elif it.returned_qty %}<span class="pill pill-warn">{{ it.remaining }} da rendere</span>

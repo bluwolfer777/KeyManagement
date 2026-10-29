@@ -19,8 +19,10 @@ con l'account di dominio (Active Directory).
     prestito. Un numero già fuori viene rifiutato.
 - **Prestito**: cognome e nome (obbligatori), email e telefono facoltativi, firma
   obbligatoria. Gli utenti già registrati vengono suggeriti mentre si scrive.
+- **Chiave non in elenco**: nel prestito si può scrivere al momento il nome di una
+  chiave non censita; vale solo per quel prestito e non viene aggiunta all'elenco.
 - **Riconsegna** per utente: una, alcune o tutte le chiavi (anche di prestiti
-  diversi), con firma facoltativa.
+  diversi), con firma obbligatoria.
 - **Ricevuta PDF** dal modello Excel `modelli/ricevuta_chiavi.xlsx`: "Ricevuta PDF"
   nella pagina del prestito e "Scheda PDF" (tutte le chiavi dell'utente) nella
   pagina dell'utente. Una riga per chiave con data, firma di ricevuta, firma e

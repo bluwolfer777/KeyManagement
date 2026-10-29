@@ -23,7 +23,7 @@
     {% for it in items %}
       <div class="keyrow">
         <div class="keyinfo">
-          <strong>{{ it.type_name }}{% if it.key_number %} n. {{ it.key_number }}{% endif %}</strong>
+          <strong>{{ it.type_name }}{% if it.key_number %} n. {{ it.key_number }}{% endif %}</strong>{% if it.kind == 'adhoc' %} <span class="tag">non in elenco</span>{% endif %}
           <div class="muted small">prestito del {{ it.loan_date|dt }}{% if it.remaining > 1 %} · in suo possesso: {{ it.remaining }}{% endif %}</div>
         </div>
         {% if it.remaining == 1 %}
@@ -44,12 +44,12 @@
   </section>
 
   <section class="card">
-    <h2><span class="step">2</span> Note e firma <span class="muted">(facoltative)</span></h2>
-    <label>Note
+    <h2><span class="step">2</span> Note e firma</h2>
+    <label>Note <span class="muted">(facoltative)</span>
       <textarea name="notes" rows="2" maxlength="2000">{{ form.notes or '' }}</textarea>
     </label>
     <div class="sigpad" data-input="signature">
-      <div class="sig-label">Firma di chi riconsegna</div>
+      <div class="sig-label">Firma di chi riconsegna *</div>
       <canvas></canvas>
       <div class="sig-hint">Firma qui con il dito, la penna o il mouse</div>
       <button type="button" class="btn btn-sm btn-ghost sig-clear">Cancella firma</button>

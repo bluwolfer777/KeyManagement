@@ -148,6 +148,10 @@
         row.classList.toggle("selected", n > 0);
         if (n > 0) { parts.push(label); count += n; }
       });
+      $$("input[data-extra]", loanForm).forEach((i) => {
+        const v = i.value.trim();
+        if (v) { parts.push(`${v} (non in elenco)`); count += 1; }
+      });
       summary.textContent = count ? `${count} ${count === 1 ? "chiave" : "chiavi"}: ${parts.join("; ")}` : "Nessuna chiave selezionata";
     };
     loanForm.addEventListener("input", refresh);
@@ -156,11 +160,30 @@
 
     loanForm.addEventListener("submit", (e) => {
       const any = $$("input[data-key]:checked", loanForm).length > 0 ||
-                  numInputs.some((i) => i.value.trim() !== "");
+                  numInputs.some((i) => i.value.trim() !== "") ||
+                  $$("input[data-extra]", loanForm).some((i) => i.value.trim() !== "");
       if (!any) { e.preventDefault(); alert("Seleziona almeno una chiave."); return; }
       const busy = numInputs.find(isOut);
       if (busy) { e.preventDefault(); alert(`Il numero ${busy.value.trim()} risulta già in prestito.`); busy.focus(); return; }
       if (!$("#signature").value) { e.preventDefault(); alert("Manca la firma di chi ritira le chiavi."); $(".sigpad").scrollIntoView({ behavior: "smooth", block: "center" }); }
+    });
+
+    // Chiavi non in elenco: aggiungi / togli righe (ne resta sempre almeno una, vuota)
+    const extraList = $("#extra-list");
+    const extraRows = () => $$(".extra-row", extraList);
+    extraList.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-extra-remove]");
+      if (!btn) return;
+      const row = btn.closest(".extra-row");
+      if (extraRows().length > 1) row.remove(); else $("input", row).value = "";
+      refresh();
+    });
+    $("[data-extra-add]", loanForm).addEventListener("click", () => {
+      if (extraRows().length >= 10) { alert("Al massimo 10 chiavi non in elenco per prestito."); return; }
+      const row = extraRows()[0].cloneNode(true);
+      $("input", row).value = "";
+      extraList.append(row);
+      $("input", row).focus();
     });
 
     // Suggerimenti utenti già registrati: un tocco compila cognome, nome e contatti
@@ -234,7 +257,11 @@
     returnForm.addEventListener("change", refresh);
     returnForm.addEventListener("submit", (e) => {
       if (!inputs.some((i) => (i.type === "checkbox" ? i.checked : Number(i.value) > 0))) {
-        e.preventDefault(); alert("Seleziona almeno una chiave da riconsegnare.");
+        e.preventDefault(); alert("Seleziona almeno una chiave da riconsegnare."); return;
+      }
+      if (!$("#signature").value) {
+        e.preventDefault(); alert("Manca la firma di chi riconsegna le chiavi.");
+        $(".sigpad", returnForm).scrollIntoView({ behavior: "smooth", block: "center" });
       }
     });
     refresh();

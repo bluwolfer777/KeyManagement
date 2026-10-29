@@ -27,7 +27,22 @@ CREATE TABLE IF NOT EXISTS borrowers (
     name        TEXT NOT NULL,                  -- "Nome Cognome"
     email       TEXT NOT NULL DEFAULT '',
     phone       TEXT NOT NULL DEFAULT '',
+    ad_guid     TEXT,                           -- collegamento all'utente di dominio, se lo è
     created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS directory_users (     -- copia locale degli utenti di dominio
+    guid        TEXT PRIMARY KEY,               -- objectGUID
+    username    TEXT NOT NULL DEFAULT '',
+    first_name  TEXT NOT NULL DEFAULT '',       -- givenName
+    last_name   TEXT NOT NULL DEFAULT '',       -- sn
+    email       TEXT NOT NULL DEFAULT '',
+    phone       TEXT NOT NULL DEFAULT '',
+    active      INTEGER NOT NULL DEFAULT 1,
+    synced_at   TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS meta (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS loans (
     id          INTEGER PRIMARY KEY,
@@ -70,6 +85,8 @@ CREATE TABLE IF NOT EXISTS return_items (
 
 INDEXES = """
 CREATE INDEX IF NOT EXISTS ix_borrowers_last ON borrowers(last_name COLLATE NOCASE, first_name COLLATE NOCASE);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_borrowers_guid ON borrowers(ad_guid) WHERE ad_guid IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ix_directory_names ON directory_users(last_name COLLATE NOCASE, first_name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS ix_loans_borrower ON loans(borrower_id);
 CREATE INDEX IF NOT EXISTS ix_loans_date ON loans(created_at);
 CREATE INDEX IF NOT EXISTS ix_items_loan ON loan_items(loan_id);
@@ -145,6 +162,8 @@ def migrate(conn):
                                 (SELECT COUNT(*) FROM key_copies c WHERE c.key_type_id = key_types.id AND c.active = 1)
                             WHERE kind = 'numbered'""")
             conn.execute("DROP TABLE key_copies")
+        if "ad_guid" not in _columns(conn, "borrowers"):
+            conn.execute("ALTER TABLE borrowers ADD COLUMN ad_guid TEXT")
         # Nome e cognome separati
         for table in ("borrowers", "loans"):
             cols = _columns(conn, table)
@@ -307,9 +326,27 @@ def outstanding_items(borrower_id):
     return result
 
 
-def upsert_borrower(conn, first, last, email, phone):
-    found = conn.execute("SELECT * FROM borrowers WHERE first_name = ? COLLATE NOCASE "
+def upsert_borrower(conn, first, last, email, phone, ad_guid=None):
+    """Trova o crea chi riceve le chiavi. Con ad_guid (utente scelto dal dominio) nome e cognome
+    sono quelli di Active Directory e l'utente resta collegato al suo account."""
+    d = conn.execute("SELECT * FROM directory_users WHERE guid = ?", (ad_guid,)).fetchone() if ad_guid else None
+    if d:
+        first, last = d["first_name"], d["last_name"]
+        email, phone = email or d["email"], phone or d["phone"]
+        found = conn.execute("SELECT * FROM borrowers WHERE ad_guid = ?", (d["guid"],)).fetchone() or             conn.execute("SELECT * FROM borrowers WHERE ad_guid IS NULL AND first_name = ? COLLATE NOCASE "
                          "AND last_name = ? COLLATE NOCASE ORDER BY id LIMIT 1", (first, last)).fetchone()
+        if found:
+            conn.execute("UPDATE borrowers SET ad_guid = ?, first_name = ?, last_name = ?, name = ?, "
+                         "email = CASE WHEN ? <> '' THEN ? ELSE email END, "
+                         "phone = CASE WHEN ? <> '' THEN ? ELSE phone END WHERE id = ?",
+                         (d["guid"], first, last, full_name(first, last), email, email, phone, phone, found["id"]))
+            return found["id"]
+        return conn.execute("INSERT INTO borrowers (first_name, last_name, name, email, phone, ad_guid, created_at) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (first, last, full_name(first, last), email, phone, d["guid"], now())).lastrowid
+    found = conn.execute("SELECT * FROM borrowers WHERE first_name = ? COLLATE NOCASE "
+                         "AND last_name = ? COLLATE NOCASE ORDER BY ad_guid IS NOT NULL, id LIMIT 1",
+                         (first, last)).fetchone()
     if found:
         conn.execute("UPDATE borrowers SET email = CASE WHEN ? <> '' THEN ? ELSE email END, "
                      "phone = CASE WHEN ? <> '' THEN ? ELSE phone END WHERE id = ?",
@@ -320,14 +357,63 @@ def upsert_borrower(conn, first, last, email, phone):
                         (first, last, full_name(first, last), email, phone, now())).lastrowid
 
 
+def _token_filter(columns, q):
+    """Ogni parola cercata deve comparire in almeno una delle colonne (ordine libero: 'rossi mario')."""
+    where, args = [], []
+    for token in q.split()[:5]:
+        where.append("(" + " OR ".join(f"{c} LIKE ?" for c in columns) + ")")
+        args += [f"%{token}%"] * len(columns)
+    return " AND ".join(where) or "1", args
+
+
+def suggest_people(q, limit=15):
+    """Suggerimenti per il prestito: prima chi ha già avuto chiavi, poi gli utenti del dominio."""
+    where, args = _token_filter(["b.first_name", "b.last_name", "b.email", "b.phone"], q)
+    local = rows(f"""
+        SELECT b.first_name, b.last_name, b.email, b.phone, b.ad_guid AS guid, d.username,
+               COALESCE((SELECT SUM(li.quantity - li.returned_qty) FROM loans l JOIN loan_items li
+                         ON li.loan_id = l.id WHERE l.borrower_id = b.id), 0) AS out
+        FROM borrowers b LEFT JOIN directory_users d ON d.guid = b.ad_guid
+        WHERE {where}
+        ORDER BY b.last_name COLLATE NOCASE, b.first_name COLLATE NOCASE LIMIT 8""", args)
+    for r in local:
+        r["source"] = "dominio" if r["guid"] else "locale"
+    taken = {r["guid"] for r in local if r["guid"]}
+    where, args = _token_filter(["first_name", "last_name", "username", "email"], q)
+    domain = rows(f"""
+        SELECT first_name, last_name, email, phone, guid, username, 0 AS out FROM directory_users
+        WHERE active = 1 AND {where}
+        ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE LIMIT ?""", args + [limit + len(taken)])
+    result = local + [dict(r, source="dominio") for r in domain if r["guid"] not in taken]
+    return result[:limit]
+
+
+def directory_user(guid):
+    return row("SELECT * FROM directory_users WHERE guid = ? AND active = 1", (guid,))
+
+
+def directory_users(q="", limit=300):
+    where, args = _token_filter(["d.first_name", "d.last_name", "d.username", "d.email", "d.phone"], q)
+    return rows(f"""
+        SELECT d.*, b.id AS borrower_id,
+               COALESCE((SELECT SUM(li.quantity - li.returned_qty) FROM loans l JOIN loan_items li
+                         ON li.loan_id = l.id WHERE l.borrower_id = b.id), 0) AS out_qty
+        FROM directory_users d LEFT JOIN borrowers b ON b.ad_guid = d.guid
+        WHERE d.active = 1 AND {where}
+        ORDER BY d.last_name COLLATE NOCASE, d.first_name COLLATE NOCASE LIMIT ?""", args + [limit])
+
+
 # --- Prestiti ------------------------------------------------------------------
 
-def create_loan(first, last, email, phone, notes, signature, operator, generic, numbered, extras=()):
+def create_loan(first, last, email, phone, notes, signature, operator, generic, numbered, extras=(), ad_guid=None):
     """generic: id delle chiavi senza numero; numbered: {key_type_id: numero scritto dall'operatore};
     extras: nomi di chiavi non in elenco, scritti al momento e non salvati nell'anagrafica chiavi.
     Ogni utente può avere al massimo una chiave per tipo."""
     with transaction() as conn:
-        borrower_id = upsert_borrower(conn, first, last, email, phone)
+        borrower_id = upsert_borrower(conn, first, last, email, phone, ad_guid)
+        b = conn.execute("SELECT first_name, last_name, email, phone FROM borrowers WHERE id = ?", (borrower_id,)).fetchone()
+        first, last = b["first_name"], b["last_name"]
+        email, phone = email or b["email"], phone or b["phone"]
         requested = [(type_id, "generic", None) for type_id in generic] + \
                     [(type_id, "numbered", number) for type_id, number in numbered.items()]
         items = []

@@ -51,10 +51,11 @@ def _dev_authenticate(username, password):
     return {"username": username, "display_name": f"{username} (test)", "role": role}
 
 
-def _ldap_authenticate(username, password):
-    from ldap3 import BASE, SIMPLE, SUBTREE, Connection, Server, Tls
-    from ldap3.core.exceptions import LDAPException, LDAPSocketOpenError
-    from ldap3.utils.conv import escape_filter_chars
+def open_connection(bind_user, password):
+    """Connessione LDAP autenticata (bind riuscito) oppure AuthError.
+    bind_user: UPN (utente@cpt.local) o DN completo."""
+    from ldap3 import SIMPLE, Connection, Server, Tls
+    from ldap3.core.exceptions import LDAPSocketOpenError
 
     tls = None
     if config.LDAP_USE_SSL or config.LDAP_START_TLS:
@@ -64,32 +65,42 @@ def _ldap_authenticate(username, password):
         )
     server = Server(config.LDAP_SERVER, port=config.LDAP_PORT, use_ssl=config.LDAP_USE_SSL,
                     tls=tls, connect_timeout=config.LDAP_TIMEOUT)
-    upn = f"{username}@{config.LDAP_DOMAIN}"
-    conn = Connection(server, user=upn, password=password, authentication=SIMPLE,
+    conn = Connection(server, user=bind_user, password=password, authentication=SIMPLE,
                       receive_timeout=config.LDAP_TIMEOUT, raise_exceptions=False)
     try:
-        try:
-            conn.open()
-        except LDAPSocketOpenError as exc:
-            log.error("Server LDAP %s:%s non raggiungibile: %s", config.LDAP_SERVER, config.LDAP_PORT, exc)
-            raise AuthError("Server di autenticazione non raggiungibile.") from exc
-        if config.LDAP_START_TLS and not conn.start_tls():
-            raise AuthError("Impossibile avviare la connessione sicura con il server LDAP.")
-        if not conn.bind():
-            if conn.result.get("result") == 49:   # invalidCredentials
-                raise AuthError("Credenziali non valide.")
-            log.error("Bind LDAP fallito per %s: %s", username, conn.result)
-            raise AuthError("Accesso non riuscito (errore del server LDAP).")
+        conn.open()
+    except LDAPSocketOpenError as exc:
+        log.error("Server LDAP %s:%s non raggiungibile: %s", config.LDAP_SERVER, config.LDAP_PORT, exc)
+        raise AuthError("Server di autenticazione non raggiungibile.") from exc
+    if config.LDAP_START_TLS and not conn.start_tls():
+        raise AuthError("Impossibile avviare la connessione sicura con il server LDAP.")
+    if not conn.bind():
+        if conn.result.get("result") == 49:   # invalidCredentials
+            raise AuthError("Credenziali non valide.")
+        log.error("Bind LDAP fallito per %s: %s", bind_user, conn.result)
+        raise AuthError("Accesso non riuscito (errore del server LDAP).")
+    return conn
 
+
+def _ldap_authenticate(username, password):
+    from ldap3 import BASE, SUBTREE
+    from ldap3.core.exceptions import LDAPException
+    from ldap3.utils.conv import escape_filter_chars
+
+    conn = None
+    try:
+        conn = open_connection(f"{username}@{config.LDAP_DOMAIN}", password)
         conn.search(config.LDAP_BASE_DN,
                     f"(&(objectCategory=person)(objectClass=user)"
                     f"(sAMAccountName={escape_filter_chars(username)}))",
-                    search_scope=SUBTREE, attributes=["displayName", "sAMAccountName"])
+                    search_scope=SUBTREE, attributes=["givenName", "sn", "displayName", "sAMAccountName"])
         if not conn.entries:
             raise AuthError("Utente non trovato nella directory.")
         entry = conn.entries[0]
         user_dn = entry.entry_dn
-        display_name = str(entry.displayName.value or entry.sAMAccountName.value or username)
+        # Nome e cognome reali: il nome utente per molti account è un codice.
+        full = " ".join(str(v) for v in (entry.givenName.value, entry.sn.value) if v)
+        display_name = full or str(entry.displayName.value or entry.sAMAccountName.value or username)
 
         role = None
         for role_name, group_cn in (("write", config.GROUP_WRITE), ("read", config.GROUP_READ)):
@@ -115,7 +126,8 @@ def _ldap_authenticate(username, password):
         log.exception("Errore LDAP")
         raise AuthError("Errore di comunicazione con il server LDAP.") from exc
     finally:
-        try:
-            conn.unbind()
-        except Exception:
-            pass
+        if conn is not None:
+            try:
+                conn.unbind()
+            except Exception:
+                pass

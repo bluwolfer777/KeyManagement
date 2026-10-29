@@ -34,6 +34,18 @@ LDAP_TIMEOUT = int(_env("GC_LDAP_TIMEOUT", "8"))
 GROUP_READ = _env("GC_GROUP_READ", "Gestione_Chiavi_Read_Only")
 GROUP_WRITE = _env("GC_GROUP_WRITE", "Gestione_Chiavi_Write")
 
+# --- Utenti di dominio per i suggerimenti nel prestito --------------------------
+# Gli utenti attivi del dominio vengono copiati in una tabella locale (nome, cognome, email,
+# telefono) e proposti mentre si scrive il nome nel prestito.
+DIRECTORY_SYNC = _bool("GC_DIRECTORY_SYNC", True)
+DIRECTORY_SYNC_HOURS = float(_env("GC_DIRECTORY_SYNC_HOURS", "12"))
+DIRECTORY_BASE_DN = _env("GC_DIRECTORY_BASE_DN", "") or LDAP_BASE_DN
+DIRECTORY_FILTER = _env("GC_DIRECTORY_FILTER", "")   # filtro LDAP aggiuntivo, es. (department=*)
+# Account di servizio (facoltativo) per la sincronizzazione periodica. Senza, la sincronizzazione
+# avviene in background al login di un operatore, con le sue credenziali, quando i dati sono vecchi.
+LDAP_BIND_USER = _env("GC_LDAP_BIND_USER", "")       # es. svc-chiavi@cpt.local
+LDAP_BIND_PASSWORD = _env("GC_LDAP_BIND_PASSWORD", "")
+
 # --- Applicazione ------------------------------------------------------------
 DATA_DIR = _env("GC_DATA_DIR", os.path.join(BASE_DIR, "data"))
 DATABASE = os.path.join(DATA_DIR, "chiavi.db")

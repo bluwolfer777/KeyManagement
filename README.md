@@ -19,6 +19,11 @@ con l'account di dominio (Active Directory).
     prestito. Un numero già fuori viene rifiutato.
 - **Prestito**: cognome e nome (obbligatori), email e telefono facoltativi, firma
   obbligatoria. Gli utenti già registrati vengono suggeriti mentre si scrive.
+- **Utenti di dominio**: mentre si scrive il nome nel prestito vengono proposti sia chi ha
+  già avuto chiavi sia tutti gli utenti attivi del dominio (nome e cognome da `givenName`
+  e `sn`, non il nome utente). Chi è scelto dal dominio resta collegato al suo account;
+  le persone esterne si scrivono a mano. In **Utenti → Dominio** si consulta l'elenco
+  e si avvia un prestito con un tocco. Vedi [utenti di dominio](#utenti-di-dominio).
 - **Chiave non in elenco**: nel prestito si può scrivere al momento il nome di una
   chiave non censita; vale solo per quel prestito e non viene aggiunta all'elenco.
 - **Riconsegna** per utente: una, alcune o tutte le chiavi (anche di prestiti
@@ -139,6 +144,28 @@ certificato (Servizi certificati Active Directory):
    `GC_LDAP_CA_FILE: /data/ca-cpt.pem`;
 3. `docker compose up -d` per applicare.
 
+### 4b. Utenti di dominio
+
+Gli utenti attivi del dominio (account abilitati, con nome o cognome valorizzati) vengono
+copiati in una tabella locale con una ricerca LDAP paginata, quindi senza il limite di
+1000 risultati di Active Directory. La copia si aggiorna:
+
+- **con un account di servizio** (consigliato): ogni `GC_DIRECTORY_SYNC_HOURS` ore (12)
+  e con il pulsante *Aggiorna ora* in **Utenti → Dominio**. Basta un normale utente di
+  dominio senza privilegi, con password che non scade:
+  ```yaml
+      environment:
+        GC_LDAP_BIND_USER: svc-chiavi@cpt.local
+        GC_LDAP_BIND_PASSWORD: "la-password"
+  ```
+- **senza account di servizio**: in background quando un operatore fa login e la copia ha
+  più di 12 ore, usando le credenziali di quell'operatore solo per l'aggiornamento (non
+  vengono salvate).
+
+Per limitare chi viene caricato: `GC_DIRECTORY_BASE_DN` (es. solo l'OU del personale) o
+`GC_DIRECTORY_FILTER` (filtro LDAP aggiuntivo, es. `(department=*)`). Lo stato
+dell'ultimo aggiornamento e l'eventuale errore sono mostrati in **Utenti → Dominio**.
+
 ### 5. HTTPS
 
 Le firme e i dati personali passano dal browser al server: in rete è meglio
@@ -232,6 +259,11 @@ Variabili d'ambiente (in `docker-compose.yml`, in `avvia.bat` o nel servizio):
 | `GC_PRIVACY_CONTACT` | `la direzione del CPT Trevano` | a chi rivolgersi per la privacy |
 | `GC_PRIVACY_RETENTION_YEARS` | `5` | durata di conservazione indicata nell'informativa |
 | `GC_RICEVUTA_TEMPLATE` | `modelli/ricevuta_chiavi.xlsx` | modello del PDF |
+| `GC_DIRECTORY_SYNC` | `1` | `0` = non caricare gli utenti di dominio |
+| `GC_DIRECTORY_SYNC_HOURS` | `12` | ogni quante ore aggiornare la copia |
+| `GC_DIRECTORY_BASE_DN` | come `GC_LDAP_BASE_DN` | dove cercare gli utenti |
+| `GC_DIRECTORY_FILTER` | | filtro LDAP aggiuntivo |
+| `GC_LDAP_BIND_USER` / `GC_LDAP_BIND_PASSWORD` | | account di servizio per l'aggiornamento periodico |
 
 ## Note legali e privacy
 
@@ -246,6 +278,8 @@ Variabili d'ambiente (in `docker-compose.yml`, in `avvia.bat` o nel servizio):
 - La durata di conservazione indicata **non** è applicata automaticamente: la
   cancellazione dei dati vecchi va fatta periodicamente da chi gestisce l'app.
 - I log del container contengono login riusciti e falliti con l'indirizzo IP.
+- La copia degli utenti di dominio è descritta nell'informativa; chi lascia il dominio
+  viene tolto al successivo aggiornamento, salvo che compaia nello storico dei prestiti.
 
 ## Sviluppo e test
 

@@ -8,6 +8,8 @@
 
   <section class="card">
     <h2><span class="step">1</span> Chi prende le chiavi</h2>
+    <p class="muted small form-hint">Scrivi cognome o nome: compaiono gli utenti già registrati e quelli del dominio.
+      Per una persona esterna basta compilare i campi.</p>
     <div class="grid-2 tight">
       <label>Cognome *
         <input name="last_name" id="last-name" value="{{ form.last_name or '' }}" required maxlength="100" autocapitalize="words">
@@ -17,6 +19,12 @@
       </label>
     </div>
     <div id="suggest" class="suggest" data-url="{{ url_for('api_borrowers') }}" hidden></div>
+    <input type="hidden" name="ad_guid" id="ad-guid" value="{{ linked.guid if linked else '' }}">
+    <div class="linked-chip" id="linked-chip" {% if not linked %}hidden{% endif %}>
+      <span class="tag tag-domain">dominio</span>
+      <span id="linked-text">{% if linked %}{{ linked.last_name }} {{ linked.first_name }}{% if linked.username %} · {{ linked.username }}{% endif %}{% endif %}</span>
+      <button type="button" class="link-btn" data-unlink>scollega</button>
+    </div>
     <div class="grid-2 tight">
       <label>Email <span class="muted">(facoltativa)</span>
         <input type="email" name="email" id="borrower-email" value="{{ form.email or '' }}" maxlength="200" inputmode="email">

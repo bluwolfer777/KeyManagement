@@ -14,8 +14,9 @@ from flask import (Flask, Response, abort, flash, jsonify, redirect, render_temp
 
 import config
 import db
+import directory
 import ricevuta
-from auth import AuthError, authenticate
+from auth import AuthError, authenticate, normalize_username
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("gestione_chiavi")
@@ -30,6 +31,8 @@ app.config.update(
     MAX_CONTENT_LENGTH=4 * 1024 * 1024,
 )
 db.init_app(app)
+
+GUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 PHONE_RE = re.compile(r"^[0-9+()./\s-]{5,25}$")
@@ -151,6 +154,7 @@ def login():
         session.clear()
         session.permanent = True
         session["user"] = user
+        directory.after_login(normalize_username(username), request.form.get("password", ""))
         log.info("Login %s (%s) ruolo=%s", user["username"], request.remote_addr, user["role"])
         nxt = request.args.get("next", "")
         if not nxt.startswith("/") or nxt.startswith("//"):
@@ -299,6 +303,12 @@ def read_person(form, errors):
 @write_required
 def loan_new():
     form = request.form
+    if request.method == "GET" and request.args.get("dominio"):
+        # Pulsante "Prestito" dalla vista Dominio: modulo già compilato con l'utente scelto.
+        d = db.directory_user(request.args["dominio"].strip().lower())
+        if d:
+            form = {"first_name": d["first_name"], "last_name": d["last_name"], "email": d["email"],
+                    "phone": d["phone"], "ad_guid": d["guid"]}
     if request.method == "POST":
         errors = []
         first, last, email, phone = read_person(form, errors)
@@ -312,6 +322,9 @@ def loan_new():
                 number = clean(v, 30)
                 if number:
                     numbered[to_int(k[4:])] = number
+        ad_guid = form.get("ad_guid", "").strip().lower()
+        if ad_guid and not (GUID_RE.match(ad_guid) and db.directory_user(ad_guid)):
+            ad_guid = None
         extras = [clean(x, 100) for x in form.getlist("extra") if clean(x, 100)]
         if len(extras) > 10:
             errors.append("Al massimo 10 chiavi non in elenco per prestito.")
@@ -322,7 +335,7 @@ def loan_new():
         if not errors:
             try:
                 loan_id = db.create_loan(first, last, email, phone, notes, signature, operator_name(),
-                                         generic, numbered, extras[:10])
+                                         generic, numbered, extras[:10], ad_guid)
             except db.Unavailable as exc:
                 errors.append(str(exc))
             else:
@@ -334,8 +347,10 @@ def loan_new():
     types = db.key_type_stats(active_only=True)
     out_numbers = {t["id"]: [n["key_number"] for n in db.numbers_out(t["id"])]
                    for t in types if t["kind"] == "numbered"}
-    extras = [x for x in form.getlist("extra") if x.strip()] or [""]
-    return render_template("loan_new.html", types=types, out_numbers=out_numbers, form=form, extras=extras), \
+    extras = [x for x in (form.getlist("extra") if hasattr(form, "getlist") else []) if x.strip()] or [""]
+    linked = db.directory_user(form.get("ad_guid", "")) if form.get("ad_guid") else None
+    return render_template("loan_new.html", types=types, out_numbers=out_numbers, form=form, extras=extras,
+                           linked=linked), \
         (400 if request.method == "POST" else 200)
 
 
@@ -485,8 +500,20 @@ def borrowers():
     if sort not in db.BORROWER_SORTS:
         sort = "cognome"
     desc = request.args.get("verso") == "desc"
-    return render_template("borrowers.html", borrowers=db.borrowers(q, only_open, sort, desc), q=q,
-                           only_open=only_open, sort=sort, desc=desc)
+    view = "dominio" if request.args.get("vista") == "dominio" else ("aperti" if only_open else "tutti")
+    people = db.directory_users(q) if view == "dominio" else db.borrowers(q, only_open, sort, desc)
+    return render_template("borrowers.html", borrowers=people, q=q, only_open=only_open, sort=sort, desc=desc,
+                           view=view, sync=directory.status())
+
+
+@app.post("/utenti/sincronizza")
+@write_required
+def directory_sync():
+    if directory.sync_now_async():
+        flash("Aggiornamento degli utenti di dominio avviato: ci vuole qualche istante.", "ok")
+    else:
+        flash("Aggiornamento non avviato (già in corso o account di servizio non configurato).", "warn")
+    return redirect(url_for("borrowers", vista="dominio"))
 
 
 @app.route("/utenti/<int:borrower_id>", methods=["GET", "POST"])
@@ -497,7 +524,12 @@ def borrower_detail(borrower_id):
         if session["user"]["role"] != "write":
             abort(403)
         errors = []
-        first, last, email, phone = read_person(request.form, errors)
+        form = request.form
+        if b["ad_guid"]:
+            # Per gli utenti di dominio nome e cognome arrivano da Active Directory.
+            form = form.copy()
+            form["first_name"], form["last_name"] = b["first_name"], b["last_name"]
+        first, last, email, phone = read_person(form, errors)
         for e in errors:
             flash(e, "error")
         if not errors:
@@ -569,8 +601,8 @@ def api_borrowers():
     q = clean(request.args.get("q"), 100)
     if len(q) < 2:
         return jsonify([])
-    return jsonify([{"first_name": b["first_name"], "last_name": b["last_name"], "email": b["email"],
-                     "phone": b["phone"], "out": b["out_qty"]} for b in db.borrowers(q)[:10]])
+    return jsonify([{k: p[k] for k in ("first_name", "last_name", "email", "phone", "out", "source", "guid",
+                                       "username")} for p in db.suggest_people(q)])
 
 
 # --- Errori ----------------------------------------------------------------------
@@ -583,6 +615,9 @@ def http_error(exc):
     messages = {403: "Il tuo profilo è in sola lettura: non puoi eseguire questa operazione."}
     message = messages.get(exc.code) or (exc.description if exc.code == 400 else "")
     return render_template("error.html", title=titles[exc.code], message=message), exc.code
+
+
+directory.start_scheduler()
 
 
 if __name__ == "__main__":

@@ -14,16 +14,70 @@
 
 <form method="get" class="toolbar">
   <div class="segmented">
-    <a href="{{ url_for('borrowers', q=q or None, ordina=sort, verso='desc' if desc else None) }}" class="{{ 'active' if not only_open }}">Tutti</a>
-    <a href="{{ url_for('borrowers', aperti=1, q=q or None, ordina=sort, verso='desc' if desc else None) }}" class="{{ 'active' if only_open }}">Con chiavi</a>
+    <a href="{{ url_for('borrowers', q=q or None, ordina=sort, verso='desc' if desc else None) }}" class="{{ 'active' if view == 'tutti' }}">Tutti</a>
+    <a href="{{ url_for('borrowers', aperti=1, q=q or None, ordina=sort, verso='desc' if desc else None) }}" class="{{ 'active' if view == 'aperti' }}">Con chiavi</a>
+    <a href="{{ url_for('borrowers', vista='dominio', q=q or None) }}" class="{{ 'active' if view == 'dominio' }}">Dominio</a>
   </div>
-  {% if only_open %}<input type="hidden" name="aperti" value="1">{% endif %}
-  <input type="hidden" name="ordina" value="{{ sort }}">
-  {% if desc %}<input type="hidden" name="verso" value="desc">{% endif %}
-  <input type="search" name="q" value="{{ q }}" placeholder="Cerca per cognome, nome, email, telefono…">
+  {% if view == 'dominio' %}
+    <input type="hidden" name="vista" value="dominio">
+  {% else %}
+    {% if only_open %}<input type="hidden" name="aperti" value="1">{% endif %}
+    <input type="hidden" name="ordina" value="{{ sort }}">
+    {% if desc %}<input type="hidden" name="verso" value="desc">{% endif %}
+  {% endif %}
+  <input type="search" name="q" value="{{ q }}" placeholder="{{ 'Cerca tra gli utenti di dominio: cognome, nome, email…' if view == 'dominio' else 'Cerca per cognome, nome, email, telefono…' }}">
   <button class="btn">Cerca</button>
 </form>
 
+{% if view == 'dominio' %}
+<div class="sync-status card">
+  <div>
+    {% if sync.synced_at %}
+      <strong>{{ sync.count }}</strong> utenti di dominio · ultimo aggiornamento {{ sync.synced_at|dt }}
+    {% else %}
+      <strong>Utenti di dominio non ancora caricati.</strong>
+    {% endif %}
+    {% if sync.running %}<span class="pill pill-warn">aggiornamento in corso…</span>{% endif %}
+    <div class="muted small">
+      {% if not sync.enabled %}La sincronizzazione automatica con il dominio è disattivata.
+      {% elif sync.service_account %}Si aggiornano da soli con l'account di servizio.
+      {% else %}Si aggiornano in automatico quando un operatore accede e i dati hanno più di qualche ora.{% endif %}
+      Sono proposti mentre scrivi il nome nel nuovo prestito; chi non è nel dominio si può sempre inserire a mano.
+    </div>
+    {% if sync.error %}<div class="flash flash-error small">Ultimo errore: {{ sync.error }}</div>{% endif %}
+  </div>
+  {% if can_write and sync.service_account and sync.enabled %}
+  <form method="post" action="{{ url_for('directory_sync') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button class="btn btn-sm" {{ 'disabled' if sync.running }}>Aggiorna ora</button>
+  </form>
+  {% endif %}
+</div>
+
+<section class="card">
+  {% if borrowers %}
+  <p class="muted small list-count">{{ borrowers|length }}{{ '+' if borrowers|length >= 300 }} utenti{% if borrowers|length >= 300 %} — mostrati i primi 300, usa la ricerca per trovare gli altri{% endif %}</p>
+  <table class="list">
+    <thead><tr><th>Cognome</th><th>Nome</th><th class="hide-sm">Utente</th><th class="hide-sm">Email</th><th class="num">In prestito</th>{% if can_write %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for d in borrowers %}
+      <tr {% if d.borrower_id %}class="clickable" data-href="{{ url_for('borrower_detail', borrower_id=d.borrower_id) }}"{% endif %}>
+        <td>{% if d.borrower_id %}<a href="{{ url_for('borrower_detail', borrower_id=d.borrower_id) }}"><strong>{{ d.last_name }}</strong></a>{% else %}<strong>{{ d.last_name }}</strong>{% endif %}</td>
+        <td>{{ d.first_name }}</td>
+        <td class="hide-sm small muted">{{ d.username }}</td>
+        <td class="hide-sm small">{{ d.email }}</td>
+        <td class="num">{% if d.out_qty %}<span class="pill pill-err">{{ d.out_qty }}</span>{% else %}<span class="muted">0</span>{% endif %}</td>
+        {% if can_write %}<td class="right"><a class="btn btn-sm" href="{{ url_for('loan_new', dominio=d.guid) }}">Prestito</a></td>{% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">{{ 'Nessun utente di dominio trovato.' if sync.synced_at else 'La lista si riempirà dopo la prima sincronizzazione.' }}</p>
+  {% endif %}
+</section>
+
+{% else %}
 <section class="card">
   {% if borrowers %}
   <p class="muted small list-count">{{ borrowers|length }} {{ 'utente' if borrowers|length == 1 else 'utenti' }}</p>
@@ -40,7 +94,7 @@
     <tbody>
     {% for b in borrowers %}
       <tr class="clickable" data-href="{{ url_for('borrower_detail', borrower_id=b.id) }}">
-        <td><a href="{{ url_for('borrower_detail', borrower_id=b.id) }}"><strong>{{ b.last_name }}</strong></a></td>
+        <td><a href="{{ url_for('borrower_detail', borrower_id=b.id) }}"><strong>{{ b.last_name }}</strong></a>{% if b.ad_guid %} <span class="tag tag-domain">dominio</span>{% endif %}</td>
         <td>{{ b.first_name }}</td>
         <td class="hide-sm small">{{ b.email }}</td>
         <td class="hide-sm small nowrap">{{ b.phone }}</td>
@@ -55,4 +109,5 @@
     <p class="empty">Nessun utente trovato.</p>
   {% endif %}
 </section>
+{% endif %}
 {% endblock %}

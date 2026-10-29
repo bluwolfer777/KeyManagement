@@ -186,10 +186,19 @@
       $("input", row).focus();
     });
 
-    // Suggerimenti utenti già registrati: un tocco compila cognome, nome e contatti
+    // Suggerimenti: utenti già registrati e utenti del dominio. Un tocco compila i campi e, per
+    // gli utenti di dominio, collega il prestito al loro account (nome e cognome da Active Directory).
     const first = $("#first-name"), last = $("#last-name"), box = $("#suggest");
+    const guidInput = $("#ad-guid"), chip = $("#linked-chip");
     let timer = null, seq = 0;
     const hide = () => { box.hidden = true; box.replaceChildren(); };
+    const unlink = () => { guidInput.value = ""; chip.hidden = true; };
+    const link = (p) => {
+      guidInput.value = p.guid;
+      $("#linked-text").textContent = `${p.last_name} ${p.first_name}` + (p.username ? ` · ${p.username}` : "");
+      chip.hidden = false;
+    };
+    $("[data-unlink]", chip).addEventListener("click", unlink);
     const lookup = () => {
       clearTimeout(timer);
       const q = `${last.value.trim()} ${first.value.trim()}`.trim();
@@ -201,24 +210,32 @@
           .then((data) => {
             if (mine !== seq) return;
             const exact = data.length === 1 && data[0].last_name.toLowerCase() === last.value.trim().toLowerCase() &&
-                          data[0].first_name.toLowerCase() === first.value.trim().toLowerCase();
+                          data[0].first_name.toLowerCase() === first.value.trim().toLowerCase() &&
+                          (!data[0].guid || data[0].guid === guidInput.value);
             if (!data.length || exact) { hide(); return; }
             const title = document.createElement("div");
             title.className = "suggest-title";
-            title.textContent = "Utenti già registrati:";
-            box.replaceChildren(title, ...data.map((b) => {
+            title.textContent = "Tocca per scegliere:";
+            box.replaceChildren(title, ...data.map((p) => {
               const btn = document.createElement("button");
               btn.type = "button";
               const strong = document.createElement("strong");
-              strong.textContent = `${b.last_name} ${b.first_name}`;
-              const extra = [b.email, b.phone, b.out ? `${b.out} in prestito` : ""].filter(Boolean).join(" · ");
+              strong.textContent = `${p.last_name} ${p.first_name}`;
               btn.append(strong);
+              if (p.source === "dominio") {
+                const tag = document.createElement("span");
+                tag.className = "tag tag-domain";
+                tag.textContent = "dominio";
+                btn.append(" ", tag);
+              }
+              const extra = [p.email, p.phone, p.out ? `${p.out} in prestito` : ""].filter(Boolean).join(" · ");
               if (extra) { const s = document.createElement("span"); s.className = "muted small"; s.textContent = ` — ${extra}`; btn.append(s); }
               btn.addEventListener("click", () => {
-                last.value = b.last_name; first.value = b.first_name;
+                last.value = p.last_name; first.value = p.first_name;
                 const email = $("#borrower-email"), phone = $("#borrower-phone");
-                if (!email.value) email.value = b.email;
-                if (!phone.value) phone.value = b.phone;
+                if (!email.value) email.value = p.email;
+                if (!phone.value) phone.value = p.phone;
+                if (p.guid) link(p); else unlink();
                 hide();
               });
               return btn;
@@ -228,8 +245,8 @@
           .catch(() => {});
       }, 200);
     };
-    first.addEventListener("input", lookup);
-    last.addEventListener("input", lookup);
+    // Se si cambia il nome a mano dopo aver scelto un utente di dominio, il collegamento si toglie.
+    [first, last].forEach((input) => input.addEventListener("input", () => { if (guidInput.value) unlink(); lookup(); }));
   }
 
   // Riconsegna: tutte / nessuna e riepilogo

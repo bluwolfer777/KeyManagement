@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <a class="back" href="{{ url_for('borrowers') }}">← Utenti</a>
-    <h1>{{ b.name }}</h1>
+    <h1>{{ b.last_name }} {{ b.first_name }}{% if b.ad_guid %} <span class="tag tag-domain">utente di dominio</span>{% endif %}</h1>
     <p class="muted">{{ b.email or 'nessuna email' }} · {{ b.phone or 'nessun telefono' }}</p>
   </div>
   <div class="btn-row">
@@ -38,9 +38,10 @@
     <form method="post">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <div class="grid-2 tight">
-        <label>Cognome *<input name="last_name" value="{{ b.last_name }}" required maxlength="100"></label>
-        <label>Nome *<input name="first_name" value="{{ b.first_name }}" required maxlength="100"></label>
+        <label>Cognome *<input name="last_name" value="{{ b.last_name }}" required maxlength="100" {{ 'readonly' if b.ad_guid }}></label>
+        <label>Nome *<input name="first_name" value="{{ b.first_name }}" required maxlength="100" {{ 'readonly' if b.ad_guid }}></label>
       </div>
+      {% if b.ad_guid %}<p class="muted small form-hint">Nome e cognome arrivano dal dominio e si aggiornano da soli.</p>{% endif %}
       <label>Email<input type="email" name="email" value="{{ b.email }}" maxlength="200"></label>
       <label>Telefono<input type="tel" name="phone" value="{{ b.phone }}" maxlength="40"></label>
       <div class="actions"><button class="btn">Salva dati</button></div>

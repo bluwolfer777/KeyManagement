@@ -191,6 +191,17 @@ legend { font-weight: 600; font-size: .925rem; margin-bottom: .4rem; }
 .toggle:has(input:checked) { background: var(--primary-bg); border-color: var(--primary); color: var(--primary); }
 .toggle-off { cursor: not-allowed; color: var(--muted); background: var(--chip); }
 
+/* Utenti di dominio */
+.tag-domain { background: var(--primary-bg); color: var(--primary); }
+.form-hint { margin: -.4rem 0 .9rem; }
+.linked-chip { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin: -.3rem 0 .9rem; padding: .5rem .75rem;
+  border: 1px solid var(--primary); border-radius: 10px; background: var(--primary-bg); font-size: .925rem; }
+.linked-chip .link-btn { margin-left: auto; color: var(--primary); }
+.sync-status { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.sync-status .flash { margin: .5rem 0 0; }
+.sync-status form { margin: 0; }
+input[readonly] { background: var(--chip); color: var(--muted); }
+
 /* Chiavi non in elenco */
 .extra-keys { margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
 .extra-head { display: flex; flex-direction: column; gap: .15rem; margin-bottom: .6rem; }

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Informativa sulla privacy{% endblock %}
+{% block content %}
+<article class="card legal">
+  {% if not user %}<a class="back" href="{{ url_for('login') }}">← Accesso</a>{% endif %}
+  <h1>Informativa sulla privacy</h1>
+  <p class="muted">Applicazione «Gestione Chiavi» · ultimo aggiornamento: 29 ottobre 2026</p>
+
+  <p>Questa informativa descrive come vengono trattati i dati personali raccolti con l'applicazione interna
+     di gestione dei prestiti delle chiavi, nel rispetto della normativa svizzera sulla protezione dei dati
+     applicabile all'istituto (legislazione cantonale ticinese per gli enti pubblici e, per quanto applicabile,
+     Legge federale sulla protezione dei dati, LPD).</p>
+
+  <h2>1. Titolare del trattamento</h2>
+  <p>{{ controller }}. Per qualsiasi domanda sul trattamento dei dati è possibile rivolgersi a {{ contact }}.</p>
+
+  <h2>2. Dati trattati</h2>
+  <p><strong>Persone che ricevono le chiavi</strong></p>
+  <ul>
+    <li>cognome e nome (obbligatori);</li>
+    <li>indirizzo email e numero di telefono (facoltativi);</li>
+    <li>firma apposta sul tablet o sul PC alla consegna e, facoltativamente, alla riconsegna;</li>
+    <li>chiavi ricevute (tipo ed eventuale numero), date di consegna e riconsegna, eventuali note.</li>
+  </ul>
+  <p><strong>Personale che usa l'applicazione</strong></p>
+  <ul>
+    <li>nome utente e nome visualizzato dell'account di dominio, usati per l'accesso e per registrare chi ha
+        eseguito ogni operazione;</li>
+    <li>registri tecnici di accesso (data, ora, indirizzo IP, esito), conservati per sicurezza.</li>
+  </ul>
+  <p>Le password non vengono salvate: sono verificate direttamente dal server di dominio dell'istituto.</p>
+
+  <h2>3. Finalità</h2>
+  <ul>
+    <li>gestire la consegna e la riconsegna delle chiavi e sapere in ogni momento chi le detiene;</li>
+    <li>documentare la ricezione e la restituzione tramite firma (anche con ricevuta in PDF);</li>
+    <li>contattare la persona in caso di chiavi non restituite o smarrite (solo se ha fornito email o telefono);</li>
+    <li>garantire la sicurezza degli edifici e dell'applicazione.</li>
+  </ul>
+  <p>I dati non sono usati per altri scopi, non vengono ceduti a terzi e non sono usati per profilazione.</p>
+
+  <h2>4. Chi può vedere i dati</h2>
+  <p>Solo il personale autorizzato dall'istituto, tramite appartenenza a gruppi di dominio dedicati: un gruppo
+     con sola consultazione e un gruppo che può registrare prestiti e riconsegne. Gli accessi sono personali e
+     ogni operazione registra l'operatore che l'ha eseguita.</p>
+
+  <h2>5. Dove sono conservati</h2>
+  <p>Su un server interno dell'istituto. L'applicazione non usa servizi esterni, reti di distribuzione di contenuti
+     o strumenti di statistica: tutte le risorse (pagine, stili, script) sono servite dal server interno.</p>
+
+  <h2>6. Durata di conservazione</h2>
+  <p>I dati sono conservati finché le chiavi sono in prestito e, dopo la riconsegna, per non più di
+     {{ retention_years }} anni a fini di documentazione, salvo diversi obblighi di legge o di archiviazione
+     dell'istituto. Trascorso tale periodo vengono cancellati.</p>
+
+  <h2>7. Diritti delle persone interessate</h2>
+  <p>Ogni persona può chiedere di sapere quali dati la riguardano, di correggerli se inesatti, di aggiornare o
+     togliere i contatti facoltativi e, nei limiti previsti dalla legge, di cancellarli. Le richieste vanno
+     rivolte a {{ contact }}.</p>
+
+  <h2 id="cookie">8. Cookie</h2>
+  <p>L'applicazione usa esclusivamente cookie tecnici, propri, senza scopi pubblicitari o di profilazione.</p>
+  <table>
+    <thead><tr><th>Nome</th><th>Scopo</th><th>Durata</th><th>Tipo</th></tr></thead>
+    <tbody>
+      <tr><td><code>session</code></td><td>Mantiene l'accesso dell'operatore e protegge i moduli da invii fraudolenti</td><td>Fino all'uscita, al massimo alcune ore</td><td>Necessario</td></tr>
+      <tr><td><code>gc_consent</code></td><td>Ricorda la scelta fatta sul banner dei cookie</td><td>1 anno</td><td>Necessario</td></tr>
+      <tr><td><code>gc_theme</code></td><td>Ricorda il tema chiaro o scuro scelto con il pulsante in basso a destra</td><td>1 anno</td><td>Preferenza, solo se accetti</td></tr>
+    </tbody>
+  </table>
+  <p>Scegliendo «Solo necessari» il tema scelto vale solo per la pagina aperta e non viene ricordato.
+     Puoi cambiare idea in qualsiasi momento con il link <em>Preferenze cookie</em> in fondo alla pagina.</p>
+
+  <h2>9. Modifiche</h2>
+  <p>Questa informativa può essere aggiornata; la data dell'ultima modifica è indicata in alto.</p>
+</article>
+{% endblock %}

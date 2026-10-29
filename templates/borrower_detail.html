@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ b.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back" href="{{ url_for('borrowers') }}">← Utenti</a>
+    <h1>{{ b.name }}</h1>
+    <p class="muted">{{ b.email or 'nessuna email' }} · {{ b.phone or 'nessun telefono' }}</p>
+  </div>
+  <div class="btn-row">
+    {% if loans %}<a class="btn" href="{{ url_for('borrower_pdf', borrower_id=b.id) }}" target="_blank" rel="noopener">Scheda PDF</a>{% endif %}
+    {% if can_write and items %}<a class="btn btn-primary" href="{{ url_for('return_new', borrower_id=b.id) }}">Riconsegna chiavi</a>{% endif %}
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Chiavi in suo possesso</h2>
+    {% if items %}
+    <table class="list">
+      <thead><tr><th>Chiave</th><th class="num">Q.tà</th><th>Dal</th></tr></thead>
+      <tbody>
+      {% for it in items %}
+        <tr><td>{{ it.type_name }}{% if it.key_number %} <strong>n. {{ it.key_number }}</strong>{% endif %}</td>
+            <td class="num">{{ it.remaining }}</td>
+            <td><a href="{{ url_for('loan_detail', loan_id=it.loan_id) }}">{{ it.loan_date|dt }}</a></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="empty">Nessuna chiave in prestito.</p>
+    {% endif %}
+  </section>
+
+  {% if can_write %}
+  <section class="card">
+    <h2>Dati utente</h2>
+    <form method="post">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="grid-2 tight">
+        <label>Cognome *<input name="last_name" value="{{ b.last_name }}" required maxlength="100"></label>
+        <label>Nome *<input name="first_name" value="{{ b.first_name }}" required maxlength="100"></label>
+      </div>
+      <label>Email<input type="email" name="email" value="{{ b.email }}" maxlength="200"></label>
+      <label>Telefono<input type="tel" name="phone" value="{{ b.phone }}" maxlength="40"></label>
+      <div class="actions"><button class="btn">Salva dati</button></div>
+    </form>
+  </section>
+  {% endif %}
+</div>
+
+<section class="card">
+  <h2>Storico prestiti</h2>
+  {% if loans %}
+  <table class="list">
+    <thead><tr><th>Data</th><th>Chiavi</th><th>Stato</th></tr></thead>
+    <tbody>
+    {% for l in loans %}
+      <tr class="clickable" data-href="{{ url_for('loan_detail', loan_id=l.id) }}">
+        <td class="nowrap"><a href="{{ url_for('loan_detail', loan_id=l.id) }}">{{ l.created_at|dt }}</a></td>
+        <td class="small">{{ describe_items(l['items']) }}</td>
+        <td>{% if l.remaining == 0 %}<span class="pill pill-ok">Chiuso</span>{% else %}<span class="pill pill-err">{{ l.remaining }} da rendere</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="empty">Nessun prestito.</p>{% endif %}
+</section>
+
+{% if returns %}
+<section class="card">
+  <h2>Storico riconsegne</h2>
+  <table class="list">
+    <thead><tr><th>Data</th><th>Chiavi riconsegnate</th><th class="hide-sm">Operatore</th></tr></thead>
+    <tbody>
+    {% for r in returns %}
+      <tr class="clickable" data-href="{{ url_for('return_detail', return_id=r.id) }}">
+        <td class="nowrap"><a href="{{ url_for('return_detail', return_id=r.id) }}">{{ r.created_at|dt }}</a></td>
+        <td class="small">{{ r.summary }}</td>
+        <td class="hide-sm small muted">{{ r.operator }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

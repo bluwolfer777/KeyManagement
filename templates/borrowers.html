@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Utenti{% endblock %}
+{% macro th(key, label, cls='') -%}
+  {%- set is_cur = sort == key -%}
+  {%- set next_desc = not desc if is_cur else key in ('chiavi', 'ultimo') -%}
+  <th class="{{ cls }} sortable {{ 'sorted' if is_cur }}" aria-sort="{{ ('descending' if desc else 'ascending') if is_cur else 'none' }}">
+    <a href="{{ url_for('borrowers', q=q or None, aperti=1 if only_open else None, ordina=key, verso='desc' if next_desc else None) }}">
+      {{ label }}<span class="sort-ind">{{ ('▼' if desc else '▲') if is_cur else '' }}</span>
+    </a>
+  </th>
+{%- endmacro %}
+{% block content %}
+<div class="page-head"><h1>Utenti</h1></div>
+
+<form method="get" class="toolbar">
+  <div class="segmented">
+    <a href="{{ url_for('borrowers', q=q or None, ordina=sort, verso='desc' if desc else None) }}" class="{{ 'active' if not only_open }}">Tutti</a>
+    <a href="{{ url_for('borrowers', aperti=1, q=q or None, ordina=sort, verso='desc' if desc else None) }}" class="{{ 'active' if only_open }}">Con chiavi</a>
+  </div>
+  {% if only_open %}<input type="hidden" name="aperti" value="1">{% endif %}
+  <input type="hidden" name="ordina" value="{{ sort }}">
+  {% if desc %}<input type="hidden" name="verso" value="desc">{% endif %}
+  <input type="search" name="q" value="{{ q }}" placeholder="Cerca per cognome, nome, email, telefono…">
+  <button class="btn">Cerca</button>
+</form>
+
+<section class="card">
+  {% if borrowers %}
+  <p class="muted small list-count">{{ borrowers|length }} {{ 'utente' if borrowers|length == 1 else 'utenti' }}</p>
+  <table class="list">
+    <thead><tr>
+      {{ th('cognome', 'Cognome') }}
+      {{ th('nome', 'Nome') }}
+      {{ th('email', 'Email', 'hide-sm') }}
+      {{ th('telefono', 'Telefono', 'hide-sm') }}
+      {{ th('chiavi', 'In prestito', 'num') }}
+      {{ th('ultimo', 'Ultimo prestito', 'hide-sm') }}
+      {% if can_write %}<th></th>{% endif %}
+    </tr></thead>
+    <tbody>
+    {% for b in borrowers %}
+      <tr class="clickable" data-href="{{ url_for('borrower_detail', borrower_id=b.id) }}">
+        <td><a href="{{ url_for('borrower_detail', borrower_id=b.id) }}"><strong>{{ b.last_name }}</strong></a></td>
+        <td>{{ b.first_name }}</td>
+        <td class="hide-sm small">{{ b.email }}</td>
+        <td class="hide-sm small nowrap">{{ b.phone }}</td>
+        <td class="num">{% if b.out_qty %}<span class="pill pill-err">{{ b.out_qty }}</span>{% else %}<span class="muted">0</span>{% endif %}</td>
+        <td class="hide-sm nowrap">{{ b.last_loan|dt('%d/%m/%Y') }}</td>
+        {% if can_write %}<td class="right">{% if b.out_qty %}<a class="btn btn-sm" href="{{ url_for('return_new', borrower_id=b.id) }}">Riconsegna</a>{% endif %}</td>{% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">Nessun utente trovato.</p>
+  {% endif %}
+</section>
+{% endblock %}

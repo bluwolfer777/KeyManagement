@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Panoramica{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Panoramica</h1>
+  {% if can_write %}<a class="btn btn-primary" href="{{ url_for('loan_new') }}">+ Nuovo prestito</a>{% endif %}
+</div>
+
+<div class="stats">
+  <div class="stat"><span class="stat-num">{{ totals.total }}</span><span class="stat-label">chiavi totali</span></div>
+  <div class="stat"><span class="stat-num">{{ totals.total - totals.out }}</span><span class="stat-label">disponibili</span></div>
+  <div class="stat"><span class="stat-num">{{ totals.out }}</span><span class="stat-label">in prestito</span></div>
+  <div class="stat"><span class="stat-num">{{ totals.holders }}</span><span class="stat-label">utenti con chiavi</span></div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Disponibilità chiavi</h2>
+    {% if types %}
+    <table class="list">
+      <thead><tr><th>Chiave</th><th class="num">Disp.</th><th class="num">Fuori</th><th class="num">Tot.</th></tr></thead>
+      <tbody>
+      {% for t in types %}
+        <tr class="clickable" data-href="{{ url_for('key_detail', type_id=t.id) }}">
+          <td><a href="{{ url_for('key_detail', type_id=t.id) }}">{{ t.name }}</a>
+            <span class="tag">{{ 'numerata' if t.kind == 'numbered' else 'uguali' }}</span></td>
+          <td class="num"><span class="pill {{ 'pill-ok' if t.available else 'pill-err' }}">{{ t.available }}</span></td>
+          <td class="num">{{ t.out_qty }}</td>
+          <td class="num">{{ t.total }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="empty">Nessuna chiave censita. {% if can_write %}<a href="{{ url_for('key_new') }}">Aggiungi la prima chiave</a>.{% endif %}</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Chi ha le chiavi</h2>
+    {% if holders %}
+    <ul class="holder-list">
+      {% for h in holders %}
+      <li>
+        <div>
+          <a href="{{ url_for('borrower_detail', borrower_id=h.id) }}"><strong>{{ h.name }}</strong></a>
+          <div class="muted small">{{ h.summary }}</div>
+        </div>
+        {% if can_write %}<a class="btn btn-sm" href="{{ url_for('return_new', borrower_id=h.id) }}">Riconsegna</a>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+      <p class="empty">Nessuna chiave in prestito.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

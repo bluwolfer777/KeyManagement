@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Prestito #{{ loan.id }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back no-print" href="{{ url_for('loans') }}">← Prestiti</a>
+    <h1>Prestito #{{ loan.id }}
+      {% if remaining == 0 %}<span class="pill pill-ok">Chiuso</span>{% else %}<span class="pill pill-err">{{ remaining }} da rendere</span>{% endif %}</h1>
+    <p class="muted">{{ loan.created_at|dt }} · registrato da {{ loan.operator }}</p>
+  </div>
+  <div class="btn-row no-print">
+    <a class="btn" href="{{ url_for('loan_pdf', loan_id=loan.id) }}" target="_blank" rel="noopener">Ricevuta PDF</a>
+    {% if can_write and remaining %}<a class="btn btn-primary" href="{{ url_for('return_new', borrower_id=loan.borrower_id) }}">Riconsegna</a>{% endif %}
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Utente</h2>
+    <dl class="kv">
+      <dt>Nome e cognome</dt><dd><a href="{{ url_for('borrower_detail', borrower_id=loan.borrower_id) }}">{{ loan.name }}</a></dd>
+      <dt>Email</dt><dd>{{ loan.email or '—' }}</dd>
+      <dt>Telefono</dt><dd>{{ loan.phone or '—' }}</dd>
+      {% if loan.notes %}<dt>Note</dt><dd class="prewrap">{{ loan.notes }}</dd>{% endif %}
+    </dl>
+    <h3>Firma</h3>
+    <img class="signature" src="{{ loan.signature }}" alt="Firma di {{ loan.name }}">
+  </section>
+
+  <section class="card">
+    <h2>Chiavi</h2>
+    <table class="list">
+      <thead><tr><th>Chiave</th><th class="num">Q.tà</th><th>Stato</th></tr></thead>
+      <tbody>
+      {% for it in items %}
+        <tr>
+          <td>{{ it.type_name }}{% if it.key_number %} <strong>n. {{ it.key_number }}</strong>{% endif %}</td>
+          <td class="num">{{ it.quantity }}</td>
+          <td>{% if it.remaining == 0 %}<span class="pill pill-ok">Riconsegnata</span>
+              {% elif it.returned_qty %}<span class="pill pill-warn">{{ it.remaining }} da rendere</span>
+              {% else %}<span class="pill pill-err">Fuori</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    {% if returns %}
+    <h3>Riconsegne</h3>
+    <ul class="timeline">
+      {% for r in returns %}
+      <li><a href="{{ url_for('return_detail', return_id=r.id) }}">{{ r.created_at|dt }}</a> —
+          {{ describe_items(r['items']|selectattr('loan_id', 'equalto', loan.id)|list) }}
+          <span class="muted small">({{ r.operator }})</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

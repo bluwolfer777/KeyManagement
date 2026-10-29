@@ -1,0 +1,14 @@
+# Dati e segreti: mai nel repository
+data/
+data-*/
+backup/
+*.db
+*.db-wal
+*.db-shm
+secret_key
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc

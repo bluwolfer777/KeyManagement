@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Modifica chiave' if kt else 'Nuova chiave' }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ 'Modifica «' ~ kt.name ~ '»' if kt else 'Nuova chiave' }}</h1>
+</div>
+<form method="post" class="card form-narrow">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label>Nome *
+    <input name="name" value="{{ form.name or '' }}" required maxlength="120" placeholder="es. Portone principale">
+  </label>
+  <label>Descrizione
+    <input name="description" value="{{ form.description or '' }}" maxlength="500">
+  </label>
+  <label>Ubicazione / riferimento
+    <input name="location" value="{{ form.location or '' }}" maxlength="200" placeholder="es. Bacheca A, gancio 4">
+  </label>
+
+  {% if not kt %}
+  <fieldset class="kind-choice">
+    <legend>Tipo * <span class="muted">(ogni utente può avere al massimo una chiave per tipo)</span></legend>
+    <label class="radio-card">
+      <input type="radio" name="kind" value="generic" {{ 'checked' if form.kind != 'numbered' }}>
+      <span><strong>Tutte uguali</strong><br><small>Conta solo la quantità; al prestito basta spuntarla</small></span>
+    </label>
+    <label class="radio-card">
+      <input type="radio" name="kind" value="numbered" {{ 'checked' if form.kind == 'numbered' }}>
+      <span><strong>Numerate</strong><br><small>Il numero si scrive al momento del prestito</small></span>
+    </label>
+  </fieldset>
+  {% endif %}
+
+  <label>Quantità totale *
+    <input type="number" name="total_qty" min="{{ kt.out_qty if kt else 0 }}" value="{{ form.get('total_qty', 1) }}" inputmode="numeric" required>
+    {% if kt and kt.out_qty %}<small class="muted">Attualmente in prestito: {{ kt.out_qty }}</small>{% endif %}
+  </label>
+
+  <div class="actions">
+    <a class="btn btn-ghost" href="{{ url_for('key_detail', type_id=kt.id) if kt else url_for('keys') }}">Annulla</a>
+    <button class="btn btn-primary">Salva</button>
+  </div>
+</form>
+{% endblock %}

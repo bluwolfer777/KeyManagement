@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Chiavi{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Chiavi</h1>
+  {% if can_write %}<a class="btn btn-primary" href="{{ url_for('key_new') }}">+ Nuova chiave</a>{% endif %}
+</div>
+<section class="card">
+  {% if types %}
+  <input type="search" class="filter-input" data-filter=".list tbody tr" placeholder="Cerca chiave…">
+  <table class="list">
+    <thead><tr><th>Nome</th><th>Tipo</th><th class="hide-sm">Ubicazione / note</th><th class="num">Disp.</th><th class="num">Fuori</th><th class="num">Tot.</th></tr></thead>
+    <tbody>
+    {% for t in types %}
+      <tr class="clickable {{ 'inactive' if not t.active }}" data-href="{{ url_for('key_detail', type_id=t.id) }}">
+        <td><a href="{{ url_for('key_detail', type_id=t.id) }}">{{ t.name }}</a>
+          {% if not t.active %}<span class="tag tag-muted">disattivata</span>{% endif %}
+          {% if t.description %}<div class="muted small">{{ t.description }}</div>{% endif %}</td>
+        <td>{{ 'Numerata' if t.kind == 'numbered' else 'Tutte uguali' }}</td>
+        <td class="hide-sm">{{ t.location }}</td>
+        <td class="num"><span class="pill {{ 'pill-ok' if t.available else 'pill-err' }}">{{ t.available }}</span></td>
+        <td class="num">{{ t.out_qty }}</td>
+        <td class="num">{{ t.total }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">Nessuna chiave censita.</p>
+  {% endif %}
+</section>
+{% endblock %}

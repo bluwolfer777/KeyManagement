@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Riconsegna #{{ r.id }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back no-print" href="{{ url_for('borrower_detail', borrower_id=r.borrower_id) }}">← {{ r.borrower_name }}</a>
+    <h1>Riconsegna #{{ r.id }}</h1>
+    <p class="muted">{{ r.created_at|dt }} · registrata da {{ r.operator }}</p>
+  </div>
+  <div class="btn-row no-print"><button type="button" class="btn" data-print>Stampa</button></div>
+</div>
+<div class="grid-2">
+  <section class="card">
+    <h2>Chiavi riconsegnate</h2>
+    <table class="list">
+      <thead><tr><th>Chiave</th><th class="num">Q.tà</th><th>Prestito</th></tr></thead>
+      <tbody>
+      {% for it in r['items'] %}
+        <tr><td>{{ it.type_name }}{% if it.key_number %} <strong>n. {{ it.key_number }}</strong>{% endif %}</td>
+            <td class="num">{{ it.quantity }}</td>
+            <td><a href="{{ url_for('loan_detail', loan_id=it.loan_id) }}">#{{ it.loan_id }}</a></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if r.notes %}<h3>Note</h3><p class="prewrap">{{ r.notes }}</p>{% endif %}
+  </section>
+  <section class="card">
+    <h2>Firma</h2>
+    {% if r.signature %}<img class="signature" src="{{ r.signature }}" alt="Firma">{% else %}<p class="empty">Nessuna firma.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

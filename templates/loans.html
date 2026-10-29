@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Prestiti{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Prestiti</h1>
+  <div class="btn-row">
+    <a class="btn" href="{{ url_for('loans_export') }}">Esporta CSV</a>
+    {% if can_write %}<a class="btn btn-primary" href="{{ url_for('loan_new') }}">+ Nuovo prestito</a>{% endif %}
+  </div>
+</div>
+
+<form method="get" class="toolbar">
+  <div class="segmented">
+    {% for s, label in [('aperti', 'Aperti'), ('chiusi', 'Chiusi'), ('tutti', 'Tutti')] %}
+      <a href="{{ url_for('loans', stato=s, q=q or None) }}" class="{{ 'active' if status == s }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  <input type="hidden" name="stato" value="{{ status }}">
+  <input type="search" name="q" value="{{ q }}" placeholder="Cerca per nome, email, telefono, operatore…">
+  <button class="btn">Cerca</button>
+</form>
+
+<section class="card">
+  {% if loans %}
+  <table class="list">
+    <thead><tr><th>Data</th><th>Utente</th><th>Chiavi</th><th>Stato</th><th class="hide-sm">Operatore</th></tr></thead>
+    <tbody>
+    {% for l in loans %}
+      <tr class="clickable" data-href="{{ url_for('loan_detail', loan_id=l.id) }}">
+        <td class="nowrap"><a href="{{ url_for('loan_detail', loan_id=l.id) }}">{{ l.created_at|dt }}</a></td>
+        <td>{{ l.name }}</td>
+        <td class="small">{{ describe_items(l['items']) }}</td>
+        <td>{% if l.remaining == 0 %}<span class="pill pill-ok">Chiuso</span>
+            {% elif l.remaining < l.total %}<span class="pill pill-warn">{{ l.remaining }} su {{ l.total }} da rendere</span>
+            {% else %}<span class="pill pill-err">Aperto</span>{% endif %}</td>
+        <td class="hide-sm small muted">{{ l.operator }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if loans|length >= 300 %}<p class="muted small">Mostrati i 300 più recenti: usa la ricerca per restringere.</p>{% endif %}
+  {% else %}
+    <p class="empty">Nessun prestito trovato.</p>
+  {% endif %}
+</section>
+{% endblock %}

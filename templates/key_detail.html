@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ kt.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back" href="{{ url_for('keys') }}">← Chiavi</a>
+    <h1>{{ kt.name }} {% if not kt.active %}<span class="tag tag-muted">disattivata</span>{% endif %}</h1>
+    <p class="muted">{{ 'Chiavi numerate' if kt.kind == 'numbered' else 'Chiavi tutte uguali' }}
+      {% if kt.description %} · {{ kt.description }}{% endif %}
+      {% if kt.location %} · {{ kt.location }}{% endif %}</p>
+  </div>
+  {% if can_write %}
+  <div class="btn-row">
+    <a class="btn" href="{{ url_for('key_edit', type_id=kt.id) }}">Modifica</a>
+    <form method="post" action="{{ url_for('key_toggle', type_id=kt.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <button class="btn">{{ 'Disattiva' if kt.active else 'Riattiva' }}</button>
+    </form>
+    {% if not kt.used %}
+    <form method="post" action="{{ url_for('key_delete', type_id=kt.id) }}" data-confirm="Eliminare definitivamente la chiave «{{ kt.name }}»?">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <button class="btn btn-danger">Elimina</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="stats">
+  <div class="stat"><span class="stat-num">{{ kt.available }}</span><span class="stat-label">disponibili</span></div>
+  <div class="stat"><span class="stat-num">{{ kt.out_qty }}</span><span class="stat-label">in prestito</span></div>
+  <div class="stat"><span class="stat-num">{{ kt.total }}</span><span class="stat-label">totali</span></div>
+</div>
+
+{% if kt.kind == 'numbered' %}
+<section class="card">
+  <h2>Numeri in prestito</h2>
+  {% if numbers %}
+  <table class="list">
+    <thead><tr><th>Numero</th><th>Utente</th><th>Dal</th></tr></thead>
+    <tbody>
+    {% for n in numbers %}
+      <tr><td><strong>{{ n.key_number }}</strong></td>
+          <td><a href="{{ url_for('borrower_detail', borrower_id=n.holder_id) }}">{{ n.holder }}</a></td>
+          <td><a href="{{ url_for('loan_detail', loan_id=n.loan_id) }}">{{ n.since|dt }}</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">Nessun numero in prestito.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Chi le ha in prestito</h2>
+  {% if holders %}
+  <table class="list">
+    <thead><tr><th>Utente</th><th class="num">Quantità</th><th>Dal</th></tr></thead>
+    <tbody>
+    {% for h in holders %}
+      <tr><td><a href="{{ url_for('borrower_detail', borrower_id=h.id) }}">{{ h.name }}</a></td>
+          <td class="num">{{ h.qty }}</td><td>{{ h.since|dt }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">Nessuna copia in prestito.</p>
+  {% endif %}
+</section>
+{% endblock %}

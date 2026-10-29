@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Accesso{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <form method="post" class="card login-card">
+    <img class="login-logo" src="{{ url_for('static', filename='key.svg') }}" alt="">
+    <h1>Gestione Chiavi</h1>
+    <p class="muted">Accedi con le tue credenziali di dominio</p>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Nome utente
+      <input name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" autocorrect="off" required autofocus>
+    </label>
+    <label>Password
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button class="btn btn-primary btn-block">Accedi</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Riconsegna · {{ b.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back" href="{{ url_for('borrower_detail', borrower_id=b.id) }}">← {{ b.name }}</a>
+    <h1>Riconsegna chiavi</h1>
+    <p class="muted">{{ b.name }}</p>
+  </div>
+</div>
+
+<form method="post" id="return-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <section class="card">
+    <div class="section-head">
+      <h2><span class="step">1</span> Quali chiavi riconsegna</h2>
+      <div class="btn-row">
+        <button type="button" class="btn btn-sm" data-select-all>Tutte</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-select-none>Nessuna</button>
+      </div>
+    </div>
+    <div class="keyrows">
+    {% for it in items %}
+      <div class="keyrow">
+        <div class="keyinfo">
+          <strong>{{ it.type_name }}{% if it.key_number %} n. {{ it.key_number }}{% endif %}</strong>
+          <div class="muted small">prestito del {{ it.loan_date|dt }}{% if it.remaining > 1 %} · in suo possesso: {{ it.remaining }}{% endif %}</div>
+        </div>
+        {% if it.remaining == 1 %}
+          <label class="toggle">
+            <input type="checkbox" name="ret_{{ it.id }}" value="1" data-ret data-name="{{ it.type_name }}{% if it.key_number %} n. {{ it.key_number }}{% endif %}" {{ 'checked' if form.get('ret_' ~ it.id) == '1' }}>
+            <span>Riconsegnata</span>
+          </label>
+        {% else %}
+          <div class="stepper">
+            <button type="button" class="btn step-btn" data-step="-1" aria-label="Meno">−</button>
+            <input type="number" name="ret_{{ it.id }}" min="0" max="{{ it.remaining }}" value="{{ form.get('ret_' ~ it.id, 0) }}" inputmode="numeric" data-ret data-name="{{ it.type_name }}">
+            <button type="button" class="btn step-btn" data-step="1" aria-label="Più">+</button>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">2</span> Note e firma <span class="muted">(facoltative)</span></h2>
+    <label>Note
+      <textarea name="notes" rows="2" maxlength="2000">{{ form.notes or '' }}</textarea>
+    </label>
+    <div class="sigpad" data-input="signature">
+      <div class="sig-label">Firma di chi riconsegna</div>
+      <canvas></canvas>
+      <div class="sig-hint">Firma qui con il dito, la penna o il mouse</div>
+      <button type="button" class="btn btn-sm btn-ghost sig-clear">Cancella firma</button>
+    </div>
+    <input type="hidden" name="signature" id="signature" value="{{ form.signature or '' }}">
+  </section>
+
+  <div class="submit-bar">
+    <div id="return-summary" class="summary">Nessuna chiave selezionata</div>
+    <button class="btn btn-primary btn-lg">Registra riconsegna</button>
+  </div>
+</form>
+{% endblock %}

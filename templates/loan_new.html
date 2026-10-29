@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Nuovo prestito{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Nuovo prestito</h1></div>
+
+<form method="post" id="loan-form" autocomplete="off">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+  <section class="card">
+    <h2><span class="step">1</span> Chi prende le chiavi</h2>
+    <div class="grid-2 tight">
+      <label>Cognome *
+        <input name="last_name" id="last-name" value="{{ form.last_name or '' }}" required maxlength="100" autocapitalize="words">
+      </label>
+      <label>Nome *
+        <input name="first_name" id="first-name" value="{{ form.first_name or '' }}" required maxlength="100" autocapitalize="words">
+      </label>
+    </div>
+    <div id="suggest" class="suggest" data-url="{{ url_for('api_borrowers') }}" hidden></div>
+    <div class="grid-2 tight">
+      <label>Email <span class="muted">(facoltativa)</span>
+        <input type="email" name="email" id="borrower-email" value="{{ form.email or '' }}" maxlength="200" inputmode="email">
+      </label>
+      <label>Telefono <span class="muted">(facoltativo)</span>
+        <input type="tel" name="phone" id="borrower-phone" value="{{ form.phone or '' }}" maxlength="40" inputmode="tel">
+      </label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">2</span> Chiavi da consegnare</h2>
+    {% if types %}
+    <input type="search" class="filter-input" data-filter=".keyrow" placeholder="Cerca chiave…">
+    <div class="keyrows">
+    {% for t in types %}
+      <div class="keyrow {{ 'keyrow-none' if not t.available }}" data-name="{{ t.name }}" data-text="{{ t.name }} {{ t.description }} {{ t.location }}">
+        <div class="keyinfo">
+          <strong>{{ t.name }}</strong> {% if t.kind == 'numbered' %}<span class="tag">numerata</span>{% endif %}
+          {% if t.description or t.location %}<div class="muted small">{{ t.description }}{% if t.description and t.location %} · {% endif %}{{ t.location }}</div>{% endif %}
+          <div class="small"><span class="pill {{ 'pill-ok' if t.available else 'pill-err' }}">{{ t.available }}</span> disponibili su {{ t.total }}</div>
+          {% if t.kind == 'numbered' and out_numbers[t.id] %}
+            <div class="muted small">Già fuori: {{ out_numbers[t.id]|join(', ') }}</div>
+          {% endif %}
+        </div>
+        {% if t.kind == 'generic' %}
+          <label class="toggle {{ 'toggle-off' if not t.available }}">
+            <input type="checkbox" name="key_{{ t.id }}" value="1" data-key
+                   {{ 'checked' if form.get('key_' ~ t.id) == '1' }} {{ 'disabled' if not t.available }}>
+            <span>{{ 'Consegna' if t.available else 'Esaurita' }}</span>
+          </label>
+        {% else %}
+          <div class="number-box">
+            <input name="num_{{ t.id }}" value="{{ form.get('num_' ~ t.id, '') }}" maxlength="30" placeholder="N. chiave"
+                   data-num data-out="{{ out_numbers[t.id]|join('|') }}" {{ 'disabled' if not t.available }} aria-label="Numero chiave {{ t.name }}">
+            <div class="num-warn small" hidden>Questo numero risulta già in prestito</div>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+    </div>
+    {% else %}
+      <p class="empty">Nessuna chiave attiva. <a href="{{ url_for('key_new') }}">Aggiungi una chiave</a>.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2><span class="step">3</span> Note e firma</h2>
+    <label>Note <span class="muted">(facoltative)</span>
+      <textarea name="notes" rows="2" maxlength="2000">{{ form.notes or '' }}</textarea>
+    </label>
+    <div class="sigpad" data-input="signature">
+      <div class="sig-label">Firma di chi ritira *</div>
+      <canvas></canvas>
+      <div class="sig-hint">Firma qui con il dito, la penna o il mouse</div>
+      <button type="button" class="btn btn-sm btn-ghost sig-clear">Cancella firma</button>
+    </div>
+    <input type="hidden" name="signature" id="signature" value="{{ form.signature or '' }}">
+    <p class="privacy-note">Firmando, la persona conferma di aver ricevuto le chiavi indicate e prende atto che i suoi dati
+      sono trattati secondo l'<a href="{{ url_for('privacy') }}" target="_blank" rel="noopener">informativa sulla privacy</a>.</p>
+  </section>
+
+  <div class="submit-bar">
+    <div id="loan-summary" class="summary">Nessuna chiave selezionata</div>
+    <button class="btn btn-primary btn-lg">Registra prestito</button>
+  </div>
+</form>
+{% endblock %}

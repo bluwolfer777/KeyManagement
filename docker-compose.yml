@@ -1,0 +1,21 @@
+services:
+  gestione-chiavi:
+    image: ghcr.io/bluwolfer777/keymanagement:latest
+    build: .
+    container_name: gestione-chiavi
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - gestione-chiavi-data:/data
+    environment:
+      GC_LDAP_SERVER: cpt.local
+      TZ: Europe/Zurich
+      # LDAPS consigliato quando i domain controller avranno un certificato:
+      # GC_LDAP_SSL: "1"
+      # GC_LDAP_CA_FILE: /data/ca-cpt.pem
+      # Con HTTPS davanti (reverse proxy):
+      # GC_SECURE_COOKIE: "1"
+
+volumes:
+  gestione-chiavi-data:

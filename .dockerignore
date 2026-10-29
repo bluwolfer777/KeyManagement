@@ -1,0 +1,10 @@
+.venv
+data
+__pycache__
+*.pyc
+*.bat
+Dockerfile
+docker-compose.yml
+backup
+.git
+.gitignore
